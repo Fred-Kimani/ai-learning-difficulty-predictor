@@ -1,0 +1,35 @@
+# data
+data/*
+!data/.gitkeep
+*.csv
+*.xlsx
+*.parquet
+*.jsonl
+
+# models / outputs
+models/*
+!models/.gitkeep
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.h5
+outputs/
+artifacts/
+mlruns/
+
+# notebooks
+.ipynb_checkpoints/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# secrets / local config
+.env
+.env.local
+
+# system
+.DS_Store
