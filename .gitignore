@@ -33,3 +33,5 @@ venv/
 
 # system
 .DS_Store
+
+ai-learning-difficulty-prediction-system.ipynb
