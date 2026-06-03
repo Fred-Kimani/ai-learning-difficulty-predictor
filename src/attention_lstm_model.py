@@ -1,26 +1,16 @@
+#LSTM Model with Attention
+
 import torch
 import torch.nn as nn
 
-
 class LSTMWithAttention(nn.Module):
-    def __init__(
-        self,
-        input_size: int,
-        hidden_size: int = 64,
-        num_classes: int = 2,
-    ):
+    def __init__(self, input_size=11, hidden_size=64, num_classes=3):
         super().__init__()
-
-        self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            batch_first=True,
-        )
-
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, batch_first=True)
         self.attention = nn.Linear(hidden_size, 1)
         self.fc = nn.Linear(hidden_size, num_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x, return_attention=False):
         lstm_out, _ = self.lstm(x)
 
         attention_scores = self.attention(lstm_out)
@@ -30,4 +20,8 @@ class LSTMWithAttention(nn.Module):
 
         output = self.fc(context)
 
+        # Standardize the contract for evaluation vs. training
+        if return_attention:
+            return output, attention_weights
+        
         return output

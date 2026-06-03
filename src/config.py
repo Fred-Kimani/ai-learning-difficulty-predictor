@@ -1,10 +1,15 @@
 from pathlib import Path
+import os
+import torch
 
 RANDOM_STATE = 42
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-DATA_PATH = PROJECT_ROOT / "data" / "2012-2013-data-with-predictions-4-final.csv"
+DATA_PATH = os.getenv(
+    "DATA_PATH", 
+    default="./data/raw/2012-2013-data-with-predictions-4-final.csv"
+)
 
 MODEL_DIR = PROJECT_ROOT / "models"
 ATTENTION_LSTM_MODEL_PATH = MODEL_DIR / "attention_lstm.pt"
@@ -20,17 +25,16 @@ REQUIRED_COLUMNS = [
 
 WINDOW_SIZE = 10
 FUTURE_SIZE = 5
-STRUGGLE_WRONG_THRESHOLD = 3
 
 TEST_SIZE = 0.2
 
 BATCH_SIZE = 32
 EPOCHS = 15
 LEARNING_RATE = 0.0005
-HIDDEN_SIZE = 64
-NUM_CLASSES = 2
+NUM_CLASSES = 3
 
-THRESHOLDS_TO_TEST = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50]
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 FEATURE_NAMES = [
     "response_time",
@@ -45,5 +49,3 @@ FEATURE_NAMES = [
     "time_std",
     "attempt_std",
 ]
-
-CORRECT_FEATURE_INDEX = 2

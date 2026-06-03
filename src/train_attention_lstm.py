@@ -81,5 +81,7 @@ def train_attention_lstm(
         average_loss = total_loss / len(train_loader)
 
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {average_loss:.4f}")
+        print("Training complete. Saving model weights to disk...")
+        torch.save(model.state_dict(), "attention_lstm_weights.pth")
 
     return model
