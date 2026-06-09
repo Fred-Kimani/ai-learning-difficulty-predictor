@@ -49,9 +49,6 @@ def train_random_forest_baseline(X_train, y_train):
     rf_model.fit(X_train, y_train)
     return rf_model
 
-rf_predictions = rf_model.predict(X_rf_test)
-print("Saving Random Forest baseline to disk...")
-joblib.dump(rf_model, "rf_baseline.pkl")
 
 def evaluate_random_forest_baseline(rf_model, X_test, y_test, save_plots=True):
     rf_predictions = rf_model.predict(X_test)

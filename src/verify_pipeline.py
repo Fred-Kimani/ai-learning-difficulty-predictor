@@ -59,6 +59,12 @@ def run_pipeline():
     # Import train_pipeline and run main
     from src.train_pipeline import main
     import src.optuna_tuning as optuna_tuning
+    import src.data_preprocessing as dp
+    import src.train_pipeline as tp
+
+    # Monkey patch sample_data to return head(sample_size) for verification sequence integrity
+    dp.sample_data = lambda df, sample_size, random_state: df.head(sample_size)
+    tp.sample_data = lambda df, sample_size, random_state: df.head(sample_size)
 
     # Monkey patch run_optuna_search to use 2 trials
     original_run_optuna = optuna_tuning.run_optuna_search
