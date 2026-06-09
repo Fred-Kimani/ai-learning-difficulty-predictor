@@ -1,30 +1,18 @@
 import pandas as pd
-
-from src.config import REQUIRED_COLUMNS
-
-
-def load_dataset(file_path: str) -> pd.DataFrame:
-    df = pd.read_csv(file_path)
-    return df
+from src.config import REQUIRED_COLUMNS, RANDOM_STATE, SAMPLE_SIZE
 
 
-def clean_interaction_data(df: pd.DataFrame) -> pd.DataFrame:
+def load_and_clean_data(path):
+    df = pd.read_csv(path)
+
     df = df[REQUIRED_COLUMNS].copy()
-
-    df["start_time"] = pd.to_datetime(
-        df["start_time"],
-        format="mixed",
-        errors="coerce",
-    )
 
     df["correct"] = pd.to_numeric(df["correct"], errors="coerce")
     df["attempt_count"] = pd.to_numeric(df["attempt_count"], errors="coerce")
-    df["ms_first_response"] = pd.to_numeric(
-        df["ms_first_response"],
-        errors="coerce",
-    )
+    df["ms_first_response"] = pd.to_numeric(df["ms_first_response"], errors="coerce")
+    df["start_time"] = pd.to_datetime(df["start_time"], format="mixed", errors="coerce")
 
-    df = df.dropna(subset=REQUIRED_COLUMNS)
+    df = df.dropna()
 
     df["correct"] = df["correct"].astype(int)
     df["attempt_count"] = df["attempt_count"].astype(float)
@@ -35,27 +23,9 @@ def clean_interaction_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def sample_rows(
-    df: pd.DataFrame,
-    sample_size: int | None = 200_000,
-    random_state: int = 42,
-) -> pd.DataFrame:
-    if sample_size is None:
-        return df
-
-    if len(df) <= sample_size:
-        return df
-
-    sampled_df = df.sample(n=sample_size, random_state=random_state)
-    sampled_df = sampled_df.sort_values(
-        by=["user_id", "start_time"]
-    ).reset_index(drop=True)
-
-    return sampled_df
-
-
-def print_dataset_summary(df: pd.DataFrame) -> None:
-    print("Dataset shape:", df.shape)
-    print("Number of students:", df["user_id"].nunique())
-    print("Correctness distribution:")
-    print(df["correct"].value_counts(normalize=True))
+def sample_data(df, sample_size=SAMPLE_SIZE, random_state=RANDOM_STATE):
+    if len(df) < sample_size:
+        sample_size = len(df)
+    df_sample = df.sample(n=sample_size, random_state=random_state)
+    df_sample = df_sample.sort_values(by=["user_id", "start_time"]).reset_index(drop=True)
+    return df_sample

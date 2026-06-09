@@ -6,6 +6,7 @@ data/*
 *.parquet
 *.jsonl
 
+
 # models / outputs
 models/*
 !models/.gitkeep
@@ -35,3 +36,5 @@ venv/
 .DS_Store
 
 ai-learning-difficulty-prediction-system.ipynb
+
+reports/*

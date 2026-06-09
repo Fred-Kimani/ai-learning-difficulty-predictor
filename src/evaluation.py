@@ -1,109 +1,142 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score
+)
+from src.config import PROJECT_ROOT
 
 
-def get_struggling_probabilities(
-    model: torch.nn.Module,
-    X_test_tensor: torch.Tensor,
-) -> torch.Tensor:
+def evaluate_multiclass(model, X_test_tensor, y_test_tensor, model_name="Model", has_attention=False, save_plots=True):
     model.eval()
 
     with torch.no_grad():
-        outputs = model(X_test_tensor)
-        probabilities = F.softmax(outputs, dim=1)
-        struggling_probs = probabilities[:, 1]
+        if has_attention:
+            outputs, attention_weights = model(X_test_tensor, return_attention=True)
+        else:
+            outputs = model(X_test_tensor)
 
-    return struggling_probs
+        probs = F.softmax(outputs, dim=1)
+        predictions = torch.argmax(probs, dim=1)
 
+    y_true = y_test_tensor.cpu().numpy()
+    y_pred = predictions.cpu().numpy()
 
-def evaluate_at_threshold(
-    struggling_probs: torch.Tensor,
-    y_test_tensor: torch.Tensor,
-    threshold: float,
-) -> torch.Tensor:
-    predictions = (struggling_probs >= threshold).long()
+    target_names = ["Low Risk", "Medium Risk", "High Risk"]
 
     print("\n" + "=" * 60)
-    print(f"Threshold: {threshold}")
-    print(classification_report(y_test_tensor.numpy(), predictions.numpy()))
-    print("Confusion Matrix:")
-    print(confusion_matrix(y_test_tensor.numpy(), predictions.numpy()))
+    print(f"{model_name} Evaluation")
+    print("=" * 60)
 
-    return predictions
+    print("\nClassification Report:")
+    print(classification_report(y_true, y_pred, target_names=target_names))
 
+    cm = confusion_matrix(y_true, y_pred)
+    print("\nConfusion Matrix:")
+    print(cm)
 
-def evaluate_thresholds(
-    model: torch.nn.Module,
-    X_test_tensor: torch.Tensor,
-    y_test_tensor: torch.Tensor,
-    thresholds: list[float],
-) -> torch.Tensor:
-    struggling_probs = get_struggling_probabilities(model, X_test_tensor)
-
-    for threshold in thresholds:
-        evaluate_at_threshold(
-            struggling_probs=struggling_probs,
-            y_test_tensor=y_test_tensor,
-            threshold=threshold,
-        )
-
-    return struggling_probs
-
-
-def summarize_threshold_results(
-    struggling_probs: torch.Tensor,
-    y_test_tensor: torch.Tensor,
-    thresholds: list[float],
-) -> list[dict]:
-    results = []
-
-    y_true = y_test_tensor.numpy()
-
-    for threshold in thresholds:
-        predictions = (struggling_probs >= threshold).long().numpy()
-
-        precision, recall, f1, _ = precision_recall_fscore_support(
-            y_true,
-            predictions,
-            average="binary",
-            zero_division=0,
-        )
-
-        results.append(
-            {
-                "threshold": threshold,
-                "precision": precision,
-                "recall": recall,
-                "f1": f1,
-            }
-        )
-
-    return results
-
-
-def inspect_false_cases(
-    X_test: np.ndarray,
-    y_test_tensor: torch.Tensor,
-    predictions: torch.Tensor,
-) -> None:
-    y_true = y_test_tensor.numpy()
-    y_pred = predictions.numpy()
-
-    false_negative_indices = np.where((y_true == 1) & (y_pred == 0))[0]
-    false_positive_indices = np.where((y_true == 0) & (y_pred == 1))[0]
-
-    if len(false_negative_indices) > 0:
-        i = false_negative_indices[0]
-        print("\nFalse Negative Example: actual struggling, model missed it")
-        print(X_test[i])
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=target_names)
+    disp.plot(values_format="d")
+    plt.title(f"{model_name} Confusion Matrix")
+    plt.tight_layout()
+    if save_plots:
+        plt.savefig(PROJECT_ROOT / "reports" / f"{model_name.lower().replace(' ', '_')}_confusion_matrix.png")
+        plt.close()
     else:
-        print("\nNo false negatives found.")
+        plt.show()
 
-    if len(false_positive_indices) > 0:
-        i = false_positive_indices[0]
-        print("\nFalse Positive Example: actual not struggling, model raised alert")
-        print(X_test[i])
+    return predictions, probs
+
+
+def get_experiment_metrics(model, X_test, y_test, has_attention=False):
+    model.eval()
+    with torch.no_grad():
+        if has_attention:
+            outputs, _ = model(X_test, return_attention=True)
+        else:
+            outputs = model(X_test)
+        preds = torch.argmax(F.softmax(outputs, dim=1), dim=1)
+
+    y_true = y_test.cpu().numpy()
+    y_pred = preds.cpu().numpy()
+
+    return {
+        "Accuracy": accuracy_score(y_true, y_pred),
+        "Macro Precision": precision_score(y_true, y_pred, average="macro", zero_division=0),
+        "Macro Recall": recall_score(y_true, y_pred, average="macro", zero_division=0),
+        "Macro F1": f1_score(y_true, y_pred, average="macro", zero_division=0),
+        "High Risk Recall": recall_score(y_true, y_pred, labels=[2], average=None, zero_division=0)[0]
+    }
+
+
+def analyze_attention_distribution(model, X_test_tensor, y_test_tensor, save_plots=True):
+    model.eval()
+
+    # 1. Extract all attention weights
+    with torch.no_grad():
+        _, attention_weights = model(X_test_tensor, return_attention=True)
+
+    # attention_weights shape: (batch_size, window_size, 1) or (batch_size, window_size)
+    if attention_weights.dim() == 3:
+        weights_np = attention_weights.squeeze(-1).cpu().numpy()
     else:
-        print("\nNo false positives found.")
+        weights_np = attention_weights.cpu().numpy()
+
+    y_true_np = y_test_tensor.cpu().numpy()
+
+    window_size = weights_np.shape[1]
+    positions = np.arange(1, window_size + 1)
+
+    # 2. Global Average Attention
+    global_avg_weights = np.mean(weights_np, axis=0)
+
+    # 3. Class-Specific Average Attention
+    class_weights = {}
+    class_names = {0: "Low Risk", 1: "Medium Risk", 2: "High Risk"}
+
+    for class_idx, class_name in class_names.items():
+        mask = (y_true_np == class_idx)
+        if np.any(mask):
+            class_weights[class_name] = np.mean(weights_np[mask], axis=0)
+        else:
+            class_weights[class_name] = np.zeros(window_size)
+
+    # Visualization
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    # Plot A: Average Attention Line Plot across Classes
+    for class_name, weights in class_weights.items():
+        axes[0].plot(positions, weights, marker='o', label=class_name, linewidth=2)
+
+    axes[0].plot(positions, global_avg_weights, linestyle='--', color='black', label="Global Average", linewidth=2)
+    axes[0].set_title("Average Attention Weights by Timestep & Class", fontsize=14)
+    axes[0].set_xlabel("Timestep (1 = Oldest, 10 = Most Recent)", fontsize=12)
+    axes[0].set_ylabel("Attention Weight", fontsize=12)
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    # Plot B: Heatmap of first 50 students (Sample distribution)
+    sample_size = min(50, weights_np.shape[0])
+    sns.heatmap(weights_np[:sample_size], cmap="viridis", ax=axes[1], cbar_kws={'label': 'Attention Weight'})
+    axes[1].set_title(f"Attention Heatmap (Sample of {sample_size} sequences)", fontsize=14)
+    axes[1].set_xlabel("Timestep", fontsize=12)
+    axes[1].set_ylabel("Student Sequence ID", fontsize=12)
+    axes[1].set_xticks(positions - 0.5)
+    axes[1].set_xticklabels(positions)
+
+    plt.tight_layout()
+    if save_plots:
+        plt.savefig(PROJECT_ROOT / "reports" / "attention_distribution.png")
+        plt.close()
+    else:
+        plt.show()
+
+    return global_avg_weights, class_weights
