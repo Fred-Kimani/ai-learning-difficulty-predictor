@@ -10,7 +10,7 @@ def run_optuna_search(X_train_tensor, y_train_tensor, n_trials=15):
     input_size = X_train_tensor.shape[2]
 
     def objective(trial):
-        #Define the search space
+        #search space
         hidden_size = trial.suggest_categorical("hidden_size", [32, 64, 128])
         lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
         dropout_rate = trial.suggest_float("dropout", 0.1, 0.5)
@@ -48,7 +48,7 @@ def run_optuna_search(X_train_tensor, y_train_tensor, n_trials=15):
 
 
         dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
-        # Split train into train/val for tuning
+        #train/val
         train_size = int(0.8 * len(dataset))
         val_size = len(dataset) - train_size
         train_ds, val_ds = torch.utils.data.random_split(dataset, [train_size, val_size])
@@ -56,7 +56,7 @@ def run_optuna_search(X_train_tensor, y_train_tensor, n_trials=15):
         train_loader = torch.utils.data.DataLoader(train_ds, batch_size=64, shuffle=True)
         val_loader = torch.utils.data.DataLoader(val_ds, batch_size=64)
 
-        #Short training loop
+        #training loop
         for epoch in range(5):
             model.train()
             for batch_x, batch_y in train_loader:

@@ -1,12 +1,11 @@
-# src/data_router.py
 import pandas as pd
 import random
+from src.data_preprocessing import load_and_clean_data
 
 class InferenceDataRouter:
     def __init__(self, raw_data_path: str):
         print("Initializing Data Router: Loading database into memory...")
-        self.db = pd.read_csv(raw_data_path)
-        self.db['start_time'] = pd.to_datetime(self.db['start_time'])
+        self.db = load_and_clean_data(raw_data_path)
         
     def get_live_student_window(self, user_id: int, window_size: int = 10) -> pd.DataFrame:
         student_data = self.db[self.db['user_id'] == user_id]

@@ -8,6 +8,8 @@ from sklearn.model_selection import train_test_split
 from src.config import (
     DATA_PATH,
     MODEL_DIR,
+    TRAINED_MODEL_DIR,
+    TRAINED_SCALER_PATH,
     ATTENTION_LSTM_MODEL_PATH,
     RANDOM_FOREST_MODEL_PATH,
     SAMPLE_SIZE,
@@ -35,11 +37,12 @@ from src.optuna_tuning import run_optuna_search
 
 
 def main() -> None:
-    # Ensure directories exist
+    #check directories exist
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    TRAINED_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     os.makedirs(os.path.join(os.path.dirname(MODEL_DIR), "reports"), exist_ok=True)
 
-    print("\n--- 1. Loading and Cleaning Data ---")
+    print("\n1.Loading and Cleaning Data")
     print(f"Loading data from {DATA_PATH}...")
     df = load_and_clean_data(DATA_PATH)
     print("Full cleaned data shape:", df.shape)
@@ -47,13 +50,13 @@ def main() -> None:
     print("Correctness distribution:")
     print(df["correct"].value_counts(normalize=True))
 
-    print("\n--- 2. Sampling Data ---")
+    print("\n-2.Sampling Data")
     print(f"Sampling {SAMPLE_SIZE} interactions...")
     df_sample = sample_data(df, sample_size=SAMPLE_SIZE, random_state=RANDOM_STATE)
     print("Sampled data shape:", df_sample.shape)
     print(df_sample.head())
 
-    print("\n--- 3. Sequence Building and Multi-Class Quantile Labeling ---")
+    print("\n3.Sequence Building and Multi-Class Quantile Labeling")
     X_seq, y_seq, risk_scores = build_sequences_multiclass_quantile(
         df_sample,
         window_size=WINDOW_SIZE,
@@ -63,10 +66,15 @@ def main() -> None:
     print("y_seq shape:", y_seq.shape)
     print("Class distribution:", np.bincount(y_seq))
 
-    print("\n--- 4. Feature Normalization ---")
+    print("\n4.Feature Normalization")
     X_scaled, scalers = normalize_sequence_features(X_seq, skip_indices=[2])
+    
+    #save sequence scalers to disk
+    scalers_path = TRAINED_SCALER_PATH
+    print(f"Saving sequence scalers to {scalers_path}...")
+    joblib.dump(scalers, scalers_path)
 
-    print("\n--- 5. Splitting Dataset and Converting to Tensors ---")
+    print("\n5.Splitting Dataset and Converting to Tensors")
     X_train, X_test, y_train, y_test = train_test_split(
         X_scaled,
         y_seq,
@@ -85,7 +93,7 @@ def main() -> None:
     print("y_train distribution:", np.bincount(y_train))
     print("y_test distribution:", np.bincount(y_test))
 
-    print("\n--- 6. Random Forest Baseline Model ---")
+    print("\n6. Random Forest Baseline Model")
     X_rf = build_random_forest_features(X_scaled)
     X_rf_train, X_rf_test, y_rf_train, y_rf_test = train_test_split(
         X_rf,
@@ -102,7 +110,7 @@ def main() -> None:
     print(f"Saving Random Forest model to {RANDOM_FOREST_MODEL_PATH}...")
     joblib.dump(rf_model, RANDOM_FOREST_MODEL_PATH)
 
-    print("\n--- 7. Plain LSTM Baseline Model ---")
+    print("\n7.Plain LSTM Baseline Model")
     input_size = X_train_tensor.shape[2]
     print("Training Plain LSTM Baseline...")
     plain_lstm_model = LearningDifficultyLSTM(input_size=input_size, num_classes=3)
@@ -117,7 +125,7 @@ def main() -> None:
         weight_strength=0.0
     )
 
-    print("\n--- 8. Attention LSTM Class Weighting Experiments ---")
+    print("\n8.Attention LSTM Class Weighting Experiments")
     weight_experiments = {
         "No Weights (0.0)": 0.0,
         "Mild Weights (0.4)": 0.4,
@@ -145,7 +153,7 @@ def main() -> None:
         experiment_results.append((exp_name, metrics))
         models_dict[exp_name] = exp_model
 
-    # Print weighting experiment results table
+    #weighting experiment results table
     results_df = pd.DataFrame(
         [res[1] for res in experiment_results],
         index=[res[0] for res in experiment_results]
@@ -153,7 +161,7 @@ def main() -> None:
     print("\nClass Weighting Experiment Results:")
     print(results_df.round(4))
 
-    # Overwrite 'attention_model' with the best balanced model (Mild Weights)
+    #overwrite 'attention_model' with the best balanced model (Mild Weights)
     attention_model = models_dict["Mild Weights (0.4)"]
 
     print(f"Saving Attention LSTM model to {ATTENTION_LSTM_MODEL_PATH}...")
@@ -165,11 +173,11 @@ def main() -> None:
     print("\nEvaluating Attention LSTM (Mild Weights)...")
     evaluate_multiclass(attention_model, X_test_tensor, y_test_tensor, model_name="Attention LSTM", has_attention=True, save_plots=True)
 
-    print("\n--- 9. Optuna Hyperparameter Search (15 trials) ---")
-    # For speed and verification, we run Optuna study
+    print("\n9.Optuna Hyperparameter Search (15 trials)")
+    # speed and verification - Optuna study
     run_optuna_search(X_train_tensor, y_train_tensor, n_trials=15)
 
-    print("\n--- 10. Single Student Prediction Demonstration ---")
+    print("\10.Single Student Prediction Demonstration")
     student_index = 0
     student_sequence_tensor = X_test_tensor[student_index].unsqueeze(0)
     student_sequence_array = X_test[student_index]
@@ -184,7 +192,7 @@ def main() -> None:
     import pprint
     pprint.pprint(prediction_result)
 
-    print("\n--- 11. Attention Weight Distribution Analysis ---")
+    print("\n11.Attention Weight Distribution Analysis")
     print("Generating attention analysis...")
     global_weights, class_avg_weights = analyze_attention_distribution(
         attention_model,

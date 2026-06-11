@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from pathlib import Path
 
 from src.model import LSTMWithAttention
-from src.config import MODEL_DIR
+from src.config import INFERENCE_ATTENTION_LSTM_PATH, INFERENCE_SCALER_PATH
 
 class RiskPredictor:
     def __init__(self):
@@ -14,8 +14,8 @@ class RiskPredictor:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         #Load MLOps Artifacts
-        scaler_path = MODEL_DIR / "sequence_scalers.pkl"
-        weights_path = MODEL_DIR / "attention_lstm_weights.pth"
+        scaler_path = INFERENCE_SCALER_PATH
+        weights_path = INFERENCE_ATTENTION_LSTM_PATH
         
         self.scalers = joblib.load(scaler_path)
         
@@ -50,7 +50,7 @@ class RiskPredictor:
         time_std = np.full(window_size, np.std(response_time))
         attempt_std = np.full(window_size, np.std(attempts))
 
-        #Explicit Temporal Decay (Phase 4)
+        #Explicit Temporal Decay
         decay_rate = 0.2
         distances = np.arange(window_size - 1, -1, -1)
         temporal_decay = np.exp(-decay_rate * distances)
@@ -70,7 +70,7 @@ class RiskPredictor:
         #Append Temporal Decay after scaling
         final_sequence = np.column_stack([raw_features, temporal_decay])
         
-        #Reshape for PyTorch (Batch_Size=1, Sequence_Length=10, Features=12)
+        #Reshape for PyTorch
         final_tensor = torch.tensor(final_sequence, dtype=torch.float32).unsqueeze(0)
         return final_tensor.to(self.device)
 

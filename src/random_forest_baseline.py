@@ -62,7 +62,7 @@ def evaluate_random_forest_baseline(rf_model, X_test, y_test, save_plots=True):
     print("\nConfusion Matrix:")
     print(cm)
 
-    # Feature Importance Plot
+    #feature Importance Plot
     importances = rf_model.feature_importances_
     sorted_indices = np.argsort(importances)
 
@@ -79,7 +79,7 @@ def evaluate_random_forest_baseline(rf_model, X_test, y_test, save_plots=True):
     else:
         plt.show()
 
-    # Confusion Matrix Heatmap
+    #Confusion Matrix 
     plt.figure(figsize=(6, 5))
     sns.heatmap(
         cm,
@@ -98,7 +98,7 @@ def evaluate_random_forest_baseline(rf_model, X_test, y_test, save_plots=True):
     else:
         plt.show()
 
-    # Multiclass ROC Curve
+    #Multiclass ROC Curve
     classes = [0, 1, 2]
     y_test_binarized = label_binarize(y_test, classes=classes)
     class_names = ["Low Risk", "Medium Risk", "High Risk"]
@@ -132,7 +132,7 @@ def evaluate_random_forest_baseline(rf_model, X_test, y_test, save_plots=True):
     )
     print(f"Macro ROC AUC: {macro_auc:.4f}")
 
-    # Multiclass PR Curve
+    #Multiclass PR Curve
     plt.figure(figsize=(7, 5))
     for i, class_name in enumerate(class_names):
         precision, recall, _ = precision_recall_curve(
@@ -167,7 +167,7 @@ def evaluate_random_forest_baseline(rf_model, X_test, y_test, save_plots=True):
     )
     print(f"Macro Average Precision: {macro_ap:.4f}")
 
-    # Print raw importances
+    #raw importances
     for name, score in zip(RF_FEATURE_NAMES, importances):
         print(f"{name}: {score:.4f}")
 

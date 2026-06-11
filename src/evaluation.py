@@ -81,11 +81,11 @@ def get_experiment_metrics(model, X_test, y_test, has_attention=False):
 def analyze_attention_distribution(model, X_test_tensor, y_test_tensor, save_plots=True):
     model.eval()
 
-    # 1. Extract all attention weights
+    #Extract all attention weights
     with torch.no_grad():
         _, attention_weights = model(X_test_tensor, return_attention=True)
 
-    # attention_weights shape: (batch_size, window_size, 1) or (batch_size, window_size)
+    #attention_weights shape
     if attention_weights.dim() == 3:
         weights_np = attention_weights.squeeze(-1).cpu().numpy()
     else:
@@ -96,10 +96,10 @@ def analyze_attention_distribution(model, X_test_tensor, y_test_tensor, save_plo
     window_size = weights_np.shape[1]
     positions = np.arange(1, window_size + 1)
 
-    # 2. Global Average Attention
+    #Global Average Attention
     global_avg_weights = np.mean(weights_np, axis=0)
 
-    # 3. Class-Specific Average Attention
+    #Class-specific average attention
     class_weights = {}
     class_names = {0: "Low Risk", 1: "Medium Risk", 2: "High Risk"}
 
@@ -110,10 +110,10 @@ def analyze_attention_distribution(model, X_test_tensor, y_test_tensor, save_plo
         else:
             class_weights[class_name] = np.zeros(window_size)
 
-    # Visualization
+    #visuals
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-    # Plot A: Average Attention Line Plot across Classes
+    #Average Attention Line Plot across Classes
     for class_name, weights in class_weights.items():
         axes[0].plot(positions, weights, marker='o', label=class_name, linewidth=2)
 
@@ -124,7 +124,7 @@ def analyze_attention_distribution(model, X_test_tensor, y_test_tensor, save_plo
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    # Plot B: Heatmap of first 50 students (Sample distribution)
+    #first 50 students (Sample distribution)
     sample_size = min(50, weights_np.shape[0])
     sns.heatmap(weights_np[:sample_size], cmap="viridis", ax=axes[1], cbar_kws={'label': 'Attention Weight'})
     axes[1].set_title(f"Attention Heatmap (Sample of {sample_size} sequences)", fontsize=14)

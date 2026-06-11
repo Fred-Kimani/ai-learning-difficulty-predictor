@@ -24,7 +24,6 @@ def train_model(
         class_counts = np.bincount(y_train_tensor.cpu().numpy())
         class_weights = len(y_train_tensor) / (len(class_counts) * class_counts)
 
-        # soften weights if needed
         class_weights = class_weights ** weight_strength
 
         class_weights = torch.tensor(

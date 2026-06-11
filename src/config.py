@@ -6,16 +6,26 @@ RANDOM_STATE = 42
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Default notebook data path
+#data path
 DATA_PATH = Path("/kaggle/input/datasets/nicolaswattiez/skillbuilder-data-2009-2010/2012-2013-data-with-predictions-4-final.csv")
 
-# Local fallback if notebook path doesn't exist
+#local fallback
 if not DATA_PATH.exists():
     DATA_PATH = PROJECT_ROOT / "data" / "2012-2013-data-with-predictions-4-final.csv"
 
 MODEL_DIR = PROJECT_ROOT / "models"
-ATTENTION_LSTM_MODEL_PATH = MODEL_DIR / "attention_lstm.pt"
-RANDOM_FOREST_MODEL_PATH = MODEL_DIR / "random_forest_baseline.joblib"
+KAGGLE_MODEL_DIR = MODEL_DIR / "kaggle"
+TRAINED_MODEL_DIR = MODEL_DIR / "trained"
+
+#paths used for live inference
+INFERENCE_ATTENTION_LSTM_PATH = KAGGLE_MODEL_DIR / "attention_lstm.pt"
+INFERENCE_RANDOM_FOREST_PATH = KAGGLE_MODEL_DIR / "random_forest_baseline.joblib"
+INFERENCE_SCALER_PATH = KAGGLE_MODEL_DIR / "sequence_scalers.pkl"
+
+#paths where training/tuning pipelines
+ATTENTION_LSTM_MODEL_PATH = TRAINED_MODEL_DIR / "attention_lstm.pt"
+RANDOM_FOREST_MODEL_PATH = TRAINED_MODEL_DIR / "random_forest_baseline.joblib"
+TRAINED_SCALER_PATH = TRAINED_MODEL_DIR / "sequence_scalers.pkl"
 
 REQUIRED_COLUMNS = [
     "user_id",
@@ -37,7 +47,7 @@ NUM_CLASSES = 3
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Sequence features (12 features in total)
+#sequence features (12)
 SEQUENCE_FEATURES = [
     "response_time",
     "attempts",
@@ -53,7 +63,7 @@ SEQUENCE_FEATURES = [
     "temporal_decay"
 ]
 
-# Random Forest features (7 features in total)
+#random Forest features (7)
 RF_FEATURE_NAMES = [
     "Average Response Time",
     "Average Attempts",

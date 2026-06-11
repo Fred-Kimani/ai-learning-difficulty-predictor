@@ -60,7 +60,7 @@ def build_sequences_multiclass_quantile(df, window_size=WINDOW_SIZE, future_size
                 3, min_periods=1
             ).mean().values
 
-            # Handle possible zero division in rolling mean of relative_time if mean is 0
+            #handle possible zero division in rolling mean of relative_time if mean is 0
             mean_rt = past_window["ms_first_response"].mean()
             if mean_rt == 0:
                 relative_time = np.ones(window_size)

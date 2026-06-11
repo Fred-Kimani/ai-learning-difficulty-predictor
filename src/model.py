@@ -1,11 +1,10 @@
-# src/model.py
 import torch
 import torch.nn as nn
 
 class LSTMWithAttention(nn.Module):
     def __init__(self, input_size=12, hidden_size=64, num_classes=3):
         super().__init__()
-        # Optuna parameters
+        #optuna parameters
         self.lstm = nn.LSTM(
             input_size=input_size,
             hidden_size=hidden_size,

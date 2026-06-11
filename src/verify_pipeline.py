@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from pathlib import Path
 
-# Setup paths
+#paths
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"
 DATA_FILE = DATA_DIR / "2012-2013-data-with-predictions-4-final.csv"
@@ -21,7 +21,7 @@ def generate_mock_data():
 
     user_ids = np.repeat(np.arange(1, num_users + 1), interactions_per_user)
 
-    # Generate sequential times
+    #sequential time
     base_time = pd.Timestamp("2013-01-01 00:00:00")
     start_times = [
         (base_time + pd.Timedelta(minutes=int(i) + int(uid) * 60)).strftime("%Y-%m-%d %H:%M:%S")
@@ -40,7 +40,7 @@ def generate_mock_data():
         "ms_first_response": ms_first_response
     })
 
-    # Add noise or bad formats to test cleaning
+    #adding noise or bad formats to test cleaning
     df["correct"] = df["correct"].astype(object)
     df.loc[10:20, "correct"] = "unknown"
     df.loc[30:35, "attempt_count"] = np.nan
@@ -56,17 +56,17 @@ def run_pipeline():
     config.EPOCHS = 1  # 1 epoch for quick test
     config.BATCH_SIZE = 128
 
-    # Import train_pipeline and run main
+    #run main
     from src.train_pipeline import main
     import src.optuna_tuning as optuna_tuning
     import src.data_preprocessing as dp
     import src.train_pipeline as tp
 
-    # Monkey patch sample_data to return head(sample_size) for verification sequence integrity
+    #for verification sequence integrity
     dp.sample_data = lambda df, sample_size, random_state: df.head(sample_size)
     tp.sample_data = lambda df, sample_size, random_state: df.head(sample_size)
 
-    # Monkey patch run_optuna_search to use 2 trials
+
     original_run_optuna = optuna_tuning.run_optuna_search
 
     def fast_run_optuna_search(X_train_tensor, y_train_tensor, n_trials=2):

@@ -3,7 +3,7 @@ from src.config import REQUIRED_COLUMNS, RANDOM_STATE, SAMPLE_SIZE
 
 
 def load_and_clean_data(path):
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)
 
     df = df[REQUIRED_COLUMNS].copy()
 

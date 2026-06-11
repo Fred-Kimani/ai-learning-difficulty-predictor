@@ -13,10 +13,39 @@ REASON_TEXT = {
 
 def generate_reason_codes_from_array(sequence_array):
     reasons = []
+    
+    attempts = sequence_array[:, 1]
+    
+    #Check if the sequence array is scaled.
+
+    is_scaled = False
+    if sequence_array.shape[1] > 0 and np.abs(sequence_array[:, 0].mean()) < 10.0:
+        is_scaled = True
+
+    if is_scaled:
+        #try loading the scalers to unscale it.
+        try:
+            from src.config import INFERENCE_SCALER_PATH
+            import joblib
+            scaler_path = INFERENCE_SCALER_PATH
+            if scaler_path.exists():
+                scalers = joblib.load(scaler_path)
+                attempts_scaler = scalers.get(1)
+                if attempts_scaler is not None:
+                    attempts = attempts_scaler.inverse_transform(attempts.reshape(-1, 1)).flatten()
+            else:
+                #fallback to typical scaling parameters
+                attempts = attempts * 1.031 + 1.306
+        except Exception:
+            #fallback
+            attempts = attempts * 1.031 + 1.306
+
     recent_steps = sequence_array[-3:]
+    recent_attempts_mean = attempts[-3:].mean()
+
     if recent_steps[:, 2].mean() < 0.5:
         reasons.append("LOW_CORRECTNESS")
-    if recent_steps[:, 1].mean() > 1.5:
+    if recent_attempts_mean > 1.5:
         reasons.append("HIGH_ATTEMPTS")
     if not reasons:
         reasons.append("STEADY_PROGRESS")
@@ -31,6 +60,12 @@ def recommend_intervention(risk_level, reason_codes):
         interventions.append("Assign targeted practice and monitor closely.")
     else:
         interventions.append("No immediate intervention needed. Continue monitoring.")
+
+    if "LOW_CORRECTNESS" in reason_codes:
+        interventions.append("Review the recent topic because correctness is declining.")
+    if "HIGH_ATTEMPTS" in reason_codes:
+        interventions.append("Provide a worked example because the student needs more attempts.")
+
     return interventions
 
 
@@ -38,7 +73,7 @@ def build_student_prediction_result(model, student_sequence_tensor, student_sequ
     model.eval()
 
     with torch.no_grad():
-        # Handle models that return attention weights
+        #handle models that return attention weights
         try:
             outputs, _ = model(student_sequence_tensor, return_attention=True)
         except Exception:
