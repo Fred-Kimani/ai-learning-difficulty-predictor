@@ -83,14 +83,32 @@ class RiskPredictor:
             probs = F.softmax(outputs, dim=1)
             predicted_class = torch.argmax(probs, dim=1).item()
 
-        #Explainability Reason Codes
+        # Generate Explainability Reason Codes (Human-Centric)
         recent_correct = df_window['correct'].tail(3).mean()
         recent_attempts = df_window['attempt_count'].tail(3).mean()
+        time_variance = df_window['ms_first_response'].tail(3).std() 
+        avg_time = df_window['ms_first_response'].mean()
         
         reasons = []
-        if recent_correct < 0.5: reasons.append("Consistently failing recent concepts.")
-        if recent_attempts > 1.5: reasons.append("Requiring excessive attempts to solve.")
-        if not reasons: reasons.append("Maintaining steady progress.")
+        
+        # 1. Comprehension & Foundation
+        if recent_correct <= 0.33: 
+            reasons.append("Seems to have hit a wall with the newest material. A quick 1-on-1 review of this week's foundation might help clear the roadblock.")
+        elif recent_correct >= 0.8:
+            reasons.append("Grasping recent concepts very clearly.")
+            
+        # 2. Effort & Frustration
+        if recent_attempts >= 2.0: 
+            reasons.append("They are putting in the effort, but spinning their wheels on these problems. Might be stuck on a specific misconception.")
+            
+        # 3. Pacing & Cognitive Load
+        # If their recent response time fluctuates wildly compared to their historical average
+        if pd.notna(time_variance) and time_variance > (avg_time * 1.5):
+            reasons.append("Pacing is very uneven right now—they might be rushing through some questions and getting completely stuck on others.")
+            
+        # 4. Steady State Fallback
+        if not reasons: 
+            reasons.append("Cruising along nicely. No immediate interventions needed right now.")
 
         return {
             "predicted_risk_class": self.risk_labels[predicted_class],
