@@ -38,6 +38,14 @@ except Exception as e:
 class ClassSummaryRequest(BaseModel):
     user_ids: list[int]
 
+class InteractionStep(BaseModel):
+    correct: int
+    attempt_count: int
+    ms_first_response: float
+
+class CustomPredictionRequest(BaseModel):
+    steps: list[InteractionStep]
+
 
 #Api endpoints
 
@@ -84,6 +92,45 @@ def get_student_prediction(user_id: int):
     except ValueError as ve:
  
         raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/predict/custom")
+def predict_custom_sequence(request: CustomPredictionRequest):
+    """SCENARIO 4: Accepts a custom 10-step interaction sequence for live prediction."""
+    import pandas as pd
+    from datetime import datetime, timedelta
+
+    if len(request.steps) != 10:
+        raise HTTPException(status_code=400, detail="Exactly 10 interaction steps are required.")
+    
+    # Build a DataFrame that matches the format expected by the inference engine
+    base_time = datetime.now()
+    rows = []
+    for i, step in enumerate(request.steps):
+        rows.append({
+            "user_id": 0,
+            "start_time": base_time + timedelta(minutes=i),
+            "correct": step.correct,
+            "attempt_count": step.attempt_count,
+            "ms_first_response": step.ms_first_response,
+        })
+    
+    df_window = pd.DataFrame(rows)
+    
+    try:
+        prediction_result = predictor.predict(df_window)
+        history = [{
+            "correct": s.correct,
+            "attempt_count": s.attempt_count,
+            "ms_first_response": s.ms_first_response
+        } for s in request.steps]
+        
+        return {
+            "user_id": "custom",
+            "prediction": prediction_result,
+            "history": history
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
