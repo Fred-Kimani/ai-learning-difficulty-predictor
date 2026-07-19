@@ -1,0 +1,37 @@
+# AI Learning Difficulty Predictor — Full Stack
+# Usage: docker-compose up --build
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount data & models so they don't need to be baked into the image
+      - ./data:/app/data:ro
+      - ./models:/app/models:ro
+    env_file:
+      - .env
+    environment:
+      - DATA_CSV_PATH=data/2012-2013-data-with-predictions-4-final.csv
+      - MODEL_DIR=models/kaggle
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend-dashboard
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy

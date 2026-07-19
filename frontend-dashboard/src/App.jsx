@@ -1,5 +1,49 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
+// ── API Configuration ──
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+const API_KEY = import.meta.env.VITE_API_KEY || '';
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * Wrapper around fetch with:
+ * - Configurable base URL (VITE_API_URL)
+ * - Optional X-API-Key header (VITE_API_KEY)
+ * - 15-second AbortController timeout
+ * - Human-friendly error messages
+ */
+async function apiFetch(path, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  const headers = { ...options.headers };
+  if (API_KEY) headers['X-API-Key'] = API_KEY;
+
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Authentication failed — check your API key.');
+    }
+    return response;
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') {
+      throw new Error('Request timed out — the server took too long to respond.');
+    }
+    if (err instanceof TypeError) {
+      // Network-level failure (server unreachable, DNS, etc.)
+      throw new Error('API server is unreachable. Is the backend running?');
+    }
+    throw err;
+  }
+}
+
 // Predefined set of student IDs for quick class-wide analysis
 const DEFAULT_CLASS_IDS = [1, 10, 100, 500, 1000, 1500, 1700, 1800, 2000, 2200];
 
@@ -193,7 +237,7 @@ function App() {
 
   const checkApiHealth = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/');
+      const response = await apiFetch('/health');
       if (response.ok) {
         setApiStatus('online');
       } else {
@@ -209,7 +253,7 @@ function App() {
     setError(null);
     setSelectedStep(null);
     try {
-      const response = await fetch('http://127.0.0.1:8000/demo/random');
+      const response = await apiFetch('/demo/random');
       if (!response.ok) {
         throw new Error(`Failed to load a random student sequence (Status: ${response.status})`);
       }
@@ -236,7 +280,7 @@ function App() {
     setError(null);
     setSelectedStep(null);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/student/${finalId}`);
+      const response = await apiFetch(`/student/${finalId}`);
       if (response.status === 404) {
         throw new Error(`Student #${finalId} does not have enough history (10 interactions required).`);
       }
@@ -269,7 +313,7 @@ function App() {
     setClassLoading(true);
     setClassError(null);
     try {
-      const response = await fetch('http://127.0.0.1:8000/class/summary', {
+      const response = await apiFetch('/class/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_ids: ids })
@@ -312,7 +356,7 @@ function App() {
     setPlaygroundLoading(true);
     setPlaygroundError(null);
     try {
-      const response = await fetch('http://127.0.0.1:8000/predict/custom', {
+      const response = await apiFetch('/predict/custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ steps: playgroundSteps })
@@ -679,7 +723,7 @@ function App() {
                       <button onClick={checkApiHealth} className="text-xs text-risk-high font-medium hover:underline cursor-pointer">
                         Retry
                       </button>
-                      <span className="label-mono text-xs">http://127.0.0.1:8000/</span>
+                      <span className="label-mono text-xs">{API_BASE}</span>
                     </div>
                   </div>
                 </div>
