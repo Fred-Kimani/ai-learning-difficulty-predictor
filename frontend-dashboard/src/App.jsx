@@ -86,13 +86,22 @@ function describeConfidence(prediction) {
 // Generates a single, cohesive counselor-style paragraph
 function generateCounselorSummary(prediction) {
   if (!prediction) return '';
-  const { predicted_risk_class, attention_focus_timestep, diagnostic_reasons } = prediction;
+  const { predicted_risk_class, attention_focus_timestep, diagnostic_reasons, is_uncertain, attention_note, guardrails_applied } = prediction;
   const confidenceIntro = describeConfidence(prediction);
-  const timestepInsight = describeAttentionTimestep(attention_focus_timestep);
+  // Use backend attention_note if available (guardrail-aware), otherwise generate
+  const timestepInsight = attention_note || describeAttentionTimestep(attention_focus_timestep);
 
   let riskStatement;
-  if (predicted_risk_class === 'High Risk') {
-    riskStatement = `${confidenceIntro} there are enough warning signs that we should definitely check in with this student soon.`;
+  if (is_uncertain || predicted_risk_class === 'Uncertain') {
+    riskStatement = `${confidenceIntro} the signals are mixed enough that we can't say for certain — it's worth keeping an eye on this student without jumping to conclusions.`;
+  } else if (predicted_risk_class === 'High Risk') {
+    // Check if guardrails softened the prediction — use gentler language
+    const wasOverridden = guardrails_applied && guardrails_applied.length > 0;
+    if (wasOverridden) {
+      riskStatement = `${confidenceIntro} there are some patterns worth watching, though the overall picture has positive signals too.`;
+    } else {
+      riskStatement = `${confidenceIntro} there are enough warning signs that we should definitely check in with this student soon.`;
+    }
   } else if (predicted_risk_class === 'Medium Risk') {
     riskStatement = `${confidenceIntro} this student is showing some early signs of struggling and could use a little extra support.`;
   } else {
@@ -182,12 +191,17 @@ const PLAYGROUND_PRESETS = {
 };
 
 
+const MAX_RANDOM_TRIALS = 15;
+const MAX_PLAYGROUND_TRIALS = 10;
+
 function App() {
   // Navigation & Theme State
   const [showHero, setShowHero] = useState(true);
   const [activeTab, setActiveTab] = useState('single');
   const [theme, setTheme] = useState('light');
   const [apiStatus, setApiStatus] = useState('checking');
+  const [trialsRemaining, setTrialsRemaining] = useState(MAX_RANDOM_TRIALS);
+  const [playgroundTrialsRemaining, setPlaygroundTrialsRemaining] = useState(MAX_PLAYGROUND_TRIALS);
 
   // Single Student Analytics State
   const [data, setData] = useState(null);
@@ -249,6 +263,10 @@ function App() {
   };
 
   const fetchRandomStudent = async () => {
+    if (trialsRemaining <= 0) {
+      setError('You\'ve used all your demo trials. Refresh the page to reset.');
+      return;
+    }
     setLoading(true);
     setError(null);
     setSelectedStep(null);
@@ -261,6 +279,7 @@ function App() {
       setData(result);
       setStudentId(result.user_id.toString());
       setApiStatus('online');
+      setTrialsRemaining(prev => prev - 1);
       if (result.prediction && result.prediction.attention_focus_timestep) {
         setSelectedStep(result.prediction.attention_focus_timestep - 1);
       }
@@ -353,6 +372,10 @@ function App() {
   };
 
   const runPlaygroundPrediction = async () => {
+    if (playgroundTrialsRemaining <= 0) {
+      setPlaygroundError('You\'ve used all your playground trials. Refresh the page to reset.');
+      return;
+    }
     setPlaygroundLoading(true);
     setPlaygroundError(null);
     try {
@@ -367,6 +390,7 @@ function App() {
       const result = await response.json();
       setPlaygroundResult(result);
       setApiStatus('online');
+      setPlaygroundTrialsRemaining(prev => prev - 1);
     } catch (err) {
       setPlaygroundError(err.message);
     } finally {
@@ -380,6 +404,7 @@ function App() {
       case 'High Risk': return { text: 'text-risk-high', bg: 'bg-risk-high-soft dark:bg-risk-high-wash', dot: 'bg-risk-high' };
       case 'Medium Risk': return { text: 'text-risk-mid', bg: 'bg-risk-mid-soft dark:bg-risk-mid-wash', dot: 'bg-risk-mid' };
       case 'Low Risk': return { text: 'text-risk-low', bg: 'bg-risk-low-soft dark:bg-risk-low-wash', dot: 'bg-risk-low' };
+      case 'Uncertain': return { text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/30', dot: 'bg-amber-500' };
       default: return { text: 'text-slate-500', bg: 'bg-slate-50 dark:bg-slate-900', dot: 'bg-slate-400' };
     }
   };
@@ -694,16 +719,27 @@ function App() {
                   </button>
                 </form>
 
-                <button
-                  onClick={fetchRandomStudent}
-                  disabled={loading}
-                  className="btn-ghost text-sm py-1.5 px-3 flex items-center justify-center gap-1.5"
-                >
-                  <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 12H19" />
-                  </svg>
-                  {loading ? 'Loading...' : 'Random'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={fetchRandomStudent}
+                    disabled={loading || trialsRemaining <= 0}
+                    className="btn-ghost text-sm py-1.5 px-3 flex items-center justify-center gap-1.5"
+                  >
+                    <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 12H19" />
+                    </svg>
+                    {loading ? 'Loading...' : 'Random'}
+                  </button>
+                  <span className={`text-[11px] font-mono font-medium tabular-nums px-1.5 py-0.5 rounded-md ${
+                    trialsRemaining <= 3
+                      ? 'text-risk-high bg-risk-high-soft dark:bg-risk-high-wash'
+                      : trialsRemaining <= 7
+                        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30'
+                        : 'text-slate-400 bg-surface-sunken dark:bg-surface-dark-sunken'
+                  }`}>
+                    {trialsRemaining}/{MAX_RANDOM_TRIALS}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -768,10 +804,14 @@ function App() {
                   </button>
                   <button
                     onClick={fetchRandomStudent}
+                    disabled={trialsRemaining <= 0}
                     className="btn-primary text-xs"
                   >
                     Random Student
                   </button>
+                  <span className="text-[11px] font-mono text-slate-400">
+                    {trialsRemaining} trials left
+                  </span>
                 </div>
               </div>
             )}
@@ -810,23 +850,34 @@ function App() {
 
                       <div>
                         <p className="text-lg font-semibold text-slate-900 dark:text-white leading-tight">
-                          {data.prediction.predicted_risk_class === 'High Risk' ? 'Needs Support'
+                          {data.prediction.predicted_risk_class === 'Uncertain' ? 'Needs Review'
+                            : data.prediction.predicted_risk_class === 'High Risk' ? 'Needs Support'
                             : data.prediction.predicted_risk_class === 'Medium Risk' ? 'Worth Watching'
                             : 'Doing Well'}
                         </p>
+                        {data.prediction.predicted_risk_class === 'Uncertain' && (
+                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01" />
+                            </svg>
+                            Needs More Data
+                          </span>
+                        )}
                         <p className="text-xs text-slate-500 mt-0.5 font-mono">
                           Student #{data.user_id} · {data.prediction.predicted_risk_class}
                         </p>
                       </div>
                     </div>
 
-                    {/* Where the struggle started */}
+                    {/* Where the struggle started — or softened attention note */}
                     <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
                       <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        Attention focus: Step {data.prediction.attention_focus_timestep}
+                        {data.prediction.suppress_attention_peak
+                          ? `Model focus: Step ${data.prediction.attention_focus_timestep}`
+                          : `Attention focus: Step ${data.prediction.attention_focus_timestep}`}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                        {describeAttentionTimestep(data.prediction.attention_focus_timestep)}
+                        {data.prediction.attention_note || describeAttentionTimestep(data.prediction.attention_focus_timestep)}
                       </p>
                     </div>
                   </div>
@@ -877,7 +928,9 @@ function App() {
                           Recent Activity
                         </h3>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Click a step to inspect. Highlighted step = peak struggle point.
+                          Click a step to inspect. {data.prediction.suppress_attention_peak
+                            ? 'Highlighted step = model focus point.'
+                            : 'Highlighted step = peak struggle point.'}
                         </p>
                       </div>
                       <div className="flex gap-3 text-xs text-slate-500">
@@ -1462,7 +1515,7 @@ function App() {
               <div className="flex items-center gap-3 pt-2">
                 <button
                   onClick={runPlaygroundPrediction}
-                  disabled={playgroundLoading}
+                  disabled={playgroundLoading || playgroundTrialsRemaining <= 0}
                   className="btn-primary flex items-center gap-2"
                 >
                   {playgroundLoading ? (
@@ -1481,6 +1534,15 @@ function App() {
                     </>
                   )}
                 </button>
+                <span className={`text-[11px] font-mono font-medium tabular-nums px-1.5 py-0.5 rounded-md ${
+                  playgroundTrialsRemaining <= 2
+                    ? 'text-risk-high bg-risk-high-soft dark:bg-risk-high-wash'
+                    : playgroundTrialsRemaining <= 5
+                      ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30'
+                      : 'text-slate-400 bg-surface-sunken dark:bg-surface-dark-sunken'
+                }`}>
+                  {playgroundTrialsRemaining}/{MAX_PLAYGROUND_TRIALS}
+                </span>
                 <span className="text-xs text-slate-400">
                   {playgroundSteps.filter(s => s.correct === 1).length}/10 correct · Avg {(playgroundSteps.reduce((a, s) => a + s.ms_first_response, 0) / 10000).toFixed(1)}s
                 </span>
@@ -1533,10 +1595,19 @@ function App() {
                       </div>
                       <div>
                         <p className="text-lg font-semibold text-slate-900 dark:text-white leading-tight">
-                          {playgroundResult.prediction.predicted_risk_class === 'High Risk' ? 'Needs Support'
+                          {playgroundResult.prediction.predicted_risk_class === 'Uncertain' ? 'Needs Review'
+                            : playgroundResult.prediction.predicted_risk_class === 'High Risk' ? 'Needs Support'
                             : playgroundResult.prediction.predicted_risk_class === 'Medium Risk' ? 'Worth Watching'
                             : 'Doing Well'}
                         </p>
+                        {playgroundResult.prediction.predicted_risk_class === 'Uncertain' && (
+                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01" />
+                            </svg>
+                            Needs More Data
+                          </span>
+                        )}
                         <p className="text-xs text-slate-500 mt-0.5 font-mono">
                           Custom sequence · {playgroundResult.prediction.predicted_risk_class}
                         </p>
@@ -1544,7 +1615,9 @@ function App() {
                     </div>
                     <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
                       <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        Attention focus: Step {playgroundResult.prediction.attention_focus_timestep}
+                        {playgroundResult.prediction.suppress_attention_peak
+                          ? `Model focus: Step ${playgroundResult.prediction.attention_focus_timestep}`
+                          : `Attention focus: Step ${playgroundResult.prediction.attention_focus_timestep}`}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                         {describeAttentionTimestep(playgroundResult.prediction.attention_focus_timestep)}
