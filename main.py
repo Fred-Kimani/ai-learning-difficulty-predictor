@@ -133,12 +133,12 @@ def _require_ready():
 # ── Pydantic Models (with validation) ────────────────────────────────────────
 
 class ClassSummaryRequest(BaseModel):
-    user_ids: list[int] = Field(..., max_length=50, description="List of student IDs (max 50).")
+    user_ids: list[int] = Field(..., max_length=20, description="List of student IDs (max 20 for demo).")
 
 class InteractionStep(BaseModel):
     correct: int = Field(..., ge=0, le=1, description="0 or 1")
     attempt_count: int = Field(..., ge=1, description="Must be ≥ 1")
-    ms_first_response: float = Field(..., ge=0, description="Must be ≥ 0")
+    ms_first_response: float = Field(..., ge=0, le=300_000, description="0–300000 ms (5 min cap)")
 
 class CustomPredictionRequest(BaseModel):
     steps: list[InteractionStep] = Field(..., min_length=10, max_length=10)
@@ -270,3 +270,27 @@ def get_class_summary(request: Request, body: ClassSummaryRequest, _key=Depends(
             results[uid] = predictor.predict(df_window)
             
     return {"batch_results": results}
+
+
+@app.get("/debug/predict/{user_id}")
+@limiter.limit("10/minute")
+def debug_predict(user_id: int, request: Request, _key=Depends(_verify_api_key)):
+    """Protected debug endpoint: returns raw probabilities + guardrail metadata."""
+    _require_ready()
+    try:
+        df_window = data_router.get_live_student_window(user_id, window_size=10)
+        prediction_result = predictor.predict(df_window)
+
+        # Add raw stats for debugging
+        prediction_result["_debug"] = {
+            "overall_correct": round(float(df_window['correct'].mean()), 4),
+            "recent_correct_3": round(float(df_window['correct'].tail(3).mean()), 4),
+            "recent_attempts_3": round(float(df_window['attempt_count'].tail(3).mean()), 4),
+            "avg_response_time_ms": round(float(df_window['ms_first_response'].mean()), 1),
+            "max_response_time_ms": round(float(df_window['ms_first_response'].max()), 1),
+        }
+        return prediction_result
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
