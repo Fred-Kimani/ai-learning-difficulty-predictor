@@ -126,7 +126,7 @@ class RiskPredictor:
         #   BUT suppress uncertainty when the student is clearly performing
         #   well — a correct/strong student shouldn't be flagged as uncertain.
         raw_uncertain = max_confidence < 0.35
-        is_uncertain = raw_uncertain and overall_correct < 0.7 and recent_correct < 0.8
+        is_uncertain = bool(raw_uncertain and overall_correct < 0.7 and recent_correct < 0.8)
         if is_uncertain:
             guardrails_fired.append("uncertain_prediction")
         elif raw_uncertain and not is_uncertain:
